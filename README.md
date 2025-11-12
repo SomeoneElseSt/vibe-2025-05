@@ -20,4 +20,13 @@ So remember, the output is a new changed file after they saw what was wrong and 
 Now build out the first part of the improvement loop. The first part should be simple enough. It is just that for each new file made in the previous simulation layer it should re-run the conversations layer, re-judge it using the judging layer, and then depending on the output of each one of the criteria either go back to the simulation layer for further improvement 
 
 # Front-end 
-Now we need to make the front-end for this 
+Now we need to make the front-end for this. This is the idea for the Demo: 
+
+# Demo 
+Beautiful front-end platform  (think YC startup styled, must use Next.js and shadcn-ui)
+Must have an agent exhibiting a behaviour against the SOP (as shown by a wrongful completion). For the demo the SOP will be "provide accurate information about the users weather"  
+Agents (Dedalus) are sent to change it, they add a tool/MCP changing the Dedalus source file. Here we will trust they will add a MCP for getting weather (or just perplexity) and instructions for how to use it.  
+Now it is working after they add the tool/MCP (so here one of the simulated conversations should go show the agent like asking for location and then calling the relevant MCP to get the weather)
+Simulations are re-ran and SOP shows to be met in the point the agent was tested on
+Front-end shows this as well as the fixed/succesful simulation completion.
+User can click something like 'Deploy Agent' that is just a pop up telling them it will be relayed and reflected (not functional just demo-ish)
