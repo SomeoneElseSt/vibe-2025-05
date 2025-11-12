@@ -48,7 +48,8 @@ async def run_single_iteration(
     max_turns: int = DEFAULT_MAX_TURNS,
     temperature: float = DEFAULT_TEMPERATURE,
     judge_model: str = DEFAULT_MODEL,
-    include_reasoning: bool = True
+    include_reasoning: bool = True,
+    mcp_servers: Optional[List[str]] = None
 ):
     """Run a single iteration of the improvement loop.
     
@@ -68,14 +69,15 @@ async def run_single_iteration(
     Returns:
         Tuple of (IterationResult, List[Conversation]) or (None, None) if failed
     """
-    # Step 1: Create conversations with current prompt
+    # Step 1: Create conversations with current prompt and MCP servers
     conversation_result = await create_multiple_conversations(
         base_agent_prompt=current_prompt,
         conversational_agent_prompts=conversational_prompts,
         initial_message=initial_message,
         model=conversation_model,
         max_turns=max_turns,
-        temperature=temperature
+        temperature=temperature,
+        mcp_servers=mcp_servers
     )
     
     if not conversation_result or not conversation_result["conversations"]:
@@ -359,7 +361,7 @@ async def orchestrate_improvement_with_file(
         print(f"Current MCPs: {accumulated_mcps}", file=sys.stderr, flush=True)
         print(f"Current prompt (first 100 chars): {current_prompt[:100]}...", file=sys.stderr, flush=True)
         
-        # Run ONE iteration
+        # Run ONE iteration with accumulated MCP servers
         iteration_result, conversations = await run_single_iteration(
             current_prompt=current_prompt,
             conversational_prompts=conversational_prompts,
@@ -367,6 +369,7 @@ async def orchestrate_improvement_with_file(
             initial_message=initial_message,
             judge_prompt=judge_prompt,
             iteration_number=iteration_num,
+            mcp_servers=accumulated_mcps if accumulated_mcps else None,
             **kwargs
         )
         
