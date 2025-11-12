@@ -85,6 +85,7 @@ class OrchestrationResult(TypedDict):
     """Result from full orchestration loop."""
     success: bool
     final_prompt: str
+    final_agent_file: Optional[str]  # Path to final agent file
     all_criteria_passed: bool
     iterations: List[IterationResult]
     total_iterations: int

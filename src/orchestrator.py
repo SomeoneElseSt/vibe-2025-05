@@ -17,6 +17,11 @@ from .conversations import create_multiple_conversations
 from .judge import judge_conversation_result
 from .simulator import simulate_fixes_from_conversations
 from .merger import merge_simulation_result
+from .file_manager import (
+    read_agent_file,
+    write_agent_file,
+    apply_modification_to_file
+)
 from .config import (
     CONVERSATION_MODEL,
     DEFAULT_MAX_TURNS,
