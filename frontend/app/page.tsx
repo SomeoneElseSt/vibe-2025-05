@@ -4,6 +4,8 @@ import { useState } from "react";
 
 function IterationDetails({ iteration }: { iteration: any }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showConversations, setShowConversations] = useState(false);
+  const [showPromptChanges, setShowPromptChanges] = useState(false);
 
   return (
     <div className="rounded-lg border bg-white shadow-sm">
@@ -33,6 +35,56 @@ function IterationDetails({ iteration }: { iteration: any }) {
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t p-6 space-y-4">
+          
+          {/* Actual Conversations */}
+          <div className="rounded bg-purple-50 p-4">
+            <button
+              onClick={() => setShowConversations(!showConversations)}
+              className="w-full text-left"
+            >
+              <h4 className="font-medium text-gray-900 flex items-center justify-between">
+                <span>View Conversations ({iteration.total_conversations} total)</span>
+                <span className="text-gray-400">{showConversations ? "▼" : "▶"}</span>
+              </h4>
+            </button>
+            {showConversations && iteration.judgment_result?.judgments && (
+              <div className="mt-3 space-y-3">
+                {iteration.judgment_result.judgments.map((judgment: any, jIdx: number) => {
+                  // Get the actual conversation from the iteration data
+                  const conversations = iteration.judgment_result?.conversations || [];
+                  const conversation = conversations[jIdx];
+                  
+                  return (
+                    <div key={jIdx} className="rounded bg-white p-3 border border-purple-200">
+                      <p className="text-xs font-medium text-purple-900 mb-2">
+                        Conversation {jIdx + 1} - {judgment.overall_pass ? "✓ Passed" : "✗ Failed"}
+                      </p>
+                      {conversation?.messages && (
+                        <div className="space-y-2">
+                          {conversation.messages.map((msg: any, mIdx: number) => (
+                            <div
+                              key={mIdx}
+                              className={`text-xs p-2 rounded ${
+                                msg.role === "base_agent"
+                                  ? "bg-blue-50 border-l-2 border-blue-500"
+                                  : "bg-gray-50 border-l-2 border-gray-500"
+                              }`}
+                            >
+                              <span className="font-medium">
+                                {msg.role === "base_agent" ? "Agent:" : "User:"}
+                              </span>
+                              <p className="mt-1 whitespace-pre-wrap">{msg.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Judgment Results */}
           {iteration.judgment_result?.judgments && (
             <div className="rounded bg-gray-50 p-4">
@@ -65,16 +117,38 @@ function IterationDetails({ iteration }: { iteration: any }) {
           {/* Modification Applied */}
           {iteration.modification_applied && (
             <div className="rounded bg-blue-50 p-4">
-              <h4 className="font-medium text-gray-900 mb-2">Modification Applied</h4>
+              <h4 className="font-medium text-gray-900 mb-2">Fixer Agent Suggestion</h4>
               <p className="text-sm text-gray-700 mb-2">
-                <span className="font-medium">For criterion:</span> {iteration.modification_applied.criterion}
+                <span className="font-medium">Failed criterion:</span> {iteration.modification_applied.criterion}
               </p>
+              
+              {/* Show prompt changes */}
+              <button
+                onClick={() => setShowPromptChanges(!showPromptChanges)}
+                className="text-sm text-blue-600 hover:text-blue-800 mb-2"
+              >
+                {showPromptChanges ? "Hide" : "Show"} Prompt Changes
+              </button>
+              
+              {showPromptChanges && (
+                <div className="mt-2 mb-3 rounded bg-white p-3 border border-blue-200">
+                  <p className="text-xs font-medium text-gray-700 mb-2">Original Prompt:</p>
+                  <pre className="text-xs bg-gray-50 p-2 rounded mb-3 whitespace-pre-wrap">
+                    {iteration.modification_applied.original_prompt}
+                  </pre>
+                  <p className="text-xs font-medium text-gray-700 mb-2">Modified Prompt:</p>
+                  <pre className="text-xs bg-green-50 p-2 rounded whitespace-pre-wrap">
+                    {iteration.modification_applied.modified_prompt}
+                  </pre>
+                </div>
+              )}
+              
               {iteration.modification_applied.mcp_servers_added && iteration.modification_applied.mcp_servers_added.length > 0 && (
                 <div className="mb-2">
                   <p className="text-sm font-medium text-gray-700">MCP Servers Added:</p>
                   <ul className="list-disc list-inside text-xs text-gray-600">
                     {iteration.modification_applied.mcp_servers_added.map((server: string, i: number) => (
-                      <li key={i}>{server}</li>
+                      <li key={i} className="font-mono">{server}</li>
                     ))}
                   </ul>
                 </div>
@@ -91,7 +165,8 @@ function IterationDetails({ iteration }: { iteration: any }) {
               )}
               {iteration.modification_applied.reasoning && (
                 <div className="mt-2">
-                  <p className="text-xs text-gray-600 italic">
+                  <p className="text-xs font-medium text-gray-700">Fixer's Reasoning:</p>
+                  <p className="text-xs text-gray-600 italic mt-1">
                     {iteration.modification_applied.reasoning}
                   </p>
                 </div>
