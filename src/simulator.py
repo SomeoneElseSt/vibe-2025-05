@@ -111,11 +111,19 @@ Your task is to modify the agent's prompt to fix the issue. You can:
 - Suggest adding custom tools (Python functions)
 - Suggest adding MCP servers for external capabilities
 
+IMPORTANT: When suggesting MCP servers, you MUST choose from the list below. These are the available MCP servers from the Dedalus marketplace that can be added to the agent:
+
 {AVAILABLE_MCP_SERVERS}
+
+When suggesting an MCP server:
+- Use the exact server name from the list above
+- Explain why this specific MCP server will help fix the failed criterion
+- Consider the category (Search, Data, Location, Productivity, etc.) when making suggestions
+- You can suggest multiple MCP servers if they address different aspects of the failure
 
 {TOOL_ADDING_INSTRUCTIONS}
 
-Be specific and actionable in your modifications."""
+Be specific and actionable in your modifications. Always consider whether adding an MCP server from the list above would help the agent meet the failed criterion."""
 
     user_prompt = f"""Analyze this failed agent conversation and fix the issue.
 

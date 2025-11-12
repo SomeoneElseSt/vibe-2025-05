@@ -281,7 +281,7 @@ def orchestrate_improvement_sync(
     **kwargs
 ) -> OrchestrationResult:
     """Synchronous wrapper for orchestrate_improvement.
-    
+
     Args:
         initial_prompt: Starting base agent prompt
         conversational_prompts: List of conversational agent prompts
@@ -289,12 +289,150 @@ def orchestrate_improvement_sync(
         initial_message: Starting message for conversations
         judge_prompt: System prompt for judge agent
         **kwargs: Additional arguments passed to orchestrate_improvement
-        
+
     Returns:
         OrchestrationResult with final prompt and iteration history
     """
     return asyncio.run(orchestrate_improvement(
         initial_prompt=initial_prompt,
+        conversational_prompts=conversational_prompts,
+        criteria=criteria,
+        initial_message=initial_message,
+        judge_prompt=judge_prompt,
+        **kwargs
+    ))
+
+
+async def orchestrate_improvement_with_file(
+    initial_agent_file: str,
+    conversational_prompts: List[str],
+    criteria: List[str],
+    initial_message: str,
+    judge_prompt: str,
+    output_file: Optional[str] = None,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    **kwargs
+) -> OrchestrationResult:
+    """File-based orchestration - modifies actual Dedalus agent files.
+
+    This version reads/writes actual agent files, applying modifications
+    with tools and MCP servers to the file on disk.
+
+    Args:
+        initial_agent_file: Path to initial Dedalus agent file
+        conversational_prompts: List of conversational agent prompts
+        criteria: List of criteria to judge against
+        initial_message: Starting message for conversations
+        judge_prompt: System prompt for judge agent
+        output_file: Path for output file (defaults to initial_agent_file)
+        max_iterations: Maximum number of improvement iterations
+        **kwargs: Additional arguments (model, temperature, etc.)
+
+    Returns:
+        OrchestrationResult with final file path
+    """
+    output_file = output_file or initial_agent_file
+
+    # Read initial agent file
+    print(f"Reading initial agent file: {initial_agent_file}")
+    agent_config = read_agent_file(initial_agent_file)
+    current_prompt = agent_config["prompt"]
+    current_file = initial_agent_file
+
+    print(f"Initial prompt: {current_prompt[:100]}...")
+    print(f"Initial MCPs: {agent_config.get('mcp_servers', [])}")
+    print(f"Initial tools: {agent_config.get('tools', [])}")
+
+    # Run the regular orchestration loop
+    result = await orchestrate_improvement(
+        initial_prompt=current_prompt,
+        conversational_prompts=conversational_prompts,
+        criteria=criteria,
+        initial_message=initial_message,
+        judge_prompt=judge_prompt,
+        max_iterations=max_iterations,
+        **kwargs
+    )
+
+    # If modifications were made, write the final file
+    if result["iterations"]:
+        final_iteration = result["iterations"][-1]
+
+        if final_iteration.get("modification_applied"):
+            print(f"\nWriting final agent file to: {output_file}")
+            modification = final_iteration["modification_applied"]
+
+            # Collect all tools and MCPs from all iterations
+            all_tools = []
+            all_mcps = []
+
+            for iteration in result["iterations"]:
+                if iteration.get("modification_applied"):
+                    mod = iteration["modification_applied"]
+                    if mod.get("tools_added"):
+                        for tool in mod["tools_added"]:
+                            if tool not in all_tools:
+                                all_tools.append(tool)
+                    if mod.get("mcp_servers_added"):
+                        for mcp in mod["mcp_servers_added"]:
+                            if mcp not in all_mcps:
+                                all_mcps.append(mcp)
+
+            # Create tool definitions
+            tool_defs = [{"name": t, "description": f"Tool for {t}"} for t in all_tools]
+
+            # Write final file with accumulated changes
+            final_file = write_agent_file(
+                file_path=output_file,
+                prompt=result["final_prompt"],
+                tools=tool_defs if tool_defs else None,
+                mcp_servers=all_mcps if all_mcps else None
+            )
+
+            print(f"✅ Final agent file written successfully")
+            print(f"   Tools added: {all_tools}")
+            print(f"   MCPs added: {all_mcps}")
+
+            result["final_agent_file"] = final_file
+        else:
+            # No modifications, just write the final prompt
+            agent_config = read_agent_file(initial_agent_file)
+            final_file = write_agent_file(
+                file_path=output_file,
+                prompt=result["final_prompt"],
+                tools=None,
+                mcp_servers=agent_config.get("mcp_servers")
+            )
+            result["final_agent_file"] = final_file
+    else:
+        result["final_agent_file"] = None
+
+    return result
+
+
+def orchestrate_improvement_with_file_sync(
+    initial_agent_file: str,
+    conversational_prompts: List[str],
+    criteria: List[str],
+    initial_message: str,
+    judge_prompt: str,
+    **kwargs
+) -> OrchestrationResult:
+    """Synchronous wrapper for file-based orchestration.
+
+    Args:
+        initial_agent_file: Path to initial Dedalus agent file
+        conversational_prompts: List of conversational agent prompts
+        criteria: List of criteria to judge against
+        initial_message: Starting message for conversations
+        judge_prompt: System prompt for judge agent
+        **kwargs: Additional arguments
+
+    Returns:
+        OrchestrationResult with final file path
+    """
+    return asyncio.run(orchestrate_improvement_with_file(
+        initial_agent_file=initial_agent_file,
         conversational_prompts=conversational_prompts,
         criteria=criteria,
         initial_message=initial_message,

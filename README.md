@@ -19,3 +19,5 @@ So remember, the output is a new changed file after they saw what was wrong and 
 # Loop layer #1
 Now build out the first part of the improvement loop. The first part should be simple enough. It is just that for each new file made in the previous simulation layer it should re-run the conversations layer, re-judge it using the judging layer, and then depending on the output of each one of the criteria either go back to the simulation layer for further improvement 
 
+# Front-end 
+Now we need to make the front-end for this 

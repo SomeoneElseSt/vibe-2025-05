@@ -25,7 +25,15 @@ from .merger import (
 from .orchestrator import (
     orchestrate_improvement,
     orchestrate_improvement_sync,
+    orchestrate_improvement_with_file,
+    orchestrate_improvement_with_file_sync,
     run_single_iteration
+)
+from .file_manager import (
+    read_agent_file,
+    write_agent_file,
+    apply_modification_to_file,
+    generate_agent_file
 )
 from .types import (
     Message,
@@ -60,7 +68,13 @@ __all__ = [
     "llm_merge_modifications",
     "orchestrate_improvement",
     "orchestrate_improvement_sync",
+    "orchestrate_improvement_with_file",
+    "orchestrate_improvement_with_file_sync",
     "run_single_iteration",
+    "read_agent_file",
+    "write_agent_file",
+    "apply_modification_to_file",
+    "generate_agent_file",
     "Message",
     "Conversation",
     "ConversationResult",
