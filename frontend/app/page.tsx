@@ -2,6 +2,108 @@
 
 import { useState } from "react";
 
+function IterationDetails({ iteration }: { iteration: any }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="rounded-lg border bg-white shadow-sm">
+      {/* Header */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-6 text-left hover:bg-gray-50"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">
+            Iteration {iteration.iteration}
+            {iteration.all_criteria_passed && (
+              <span className="ml-2 rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
+                All Passed
+              </span>
+            )}
+            {!iteration.all_criteria_passed && (
+              <span className="ml-2 rounded-full bg-red-100 px-2 py-1 text-xs text-red-700">
+                {iteration.total_passed}/{iteration.total_conversations} Passed
+              </span>
+            )}
+          </h3>
+          <span className="text-gray-400">{isExpanded ? "▼" : "▶"}</span>
+        </div>
+      </button>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="border-t p-6 space-y-4">
+          {/* Judgment Results */}
+          {iteration.judgment_result?.judgments && (
+            <div className="rounded bg-gray-50 p-4">
+              <h4 className="font-medium text-gray-900 mb-3">Judgment Results</h4>
+              {iteration.judgment_result.judgments.map((judgment: any, jIdx: number) => (
+                <div key={jIdx} className="mb-4 last:mb-0">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Conversation {jIdx + 1}: {judgment.overall_pass ? "✓ Passed" : "✗ Failed"}
+                  </p>
+                  <div className="space-y-1">
+                    {judgment.criteria_scores?.map((score: any, sIdx: number) => (
+                      <div key={sIdx} className="flex items-start text-xs">
+                        <span className={score.met ? "text-green-600" : "text-red-600"}>
+                          {score.met ? "✓" : "✗"}
+                        </span>
+                        <span className="ml-2 flex-1">
+                          <span className="font-medium">{score.criterion}</span>
+                          {score.reasoning && (
+                            <span className="block text-gray-600 mt-1">{score.reasoning}</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Modification Applied */}
+          {iteration.modification_applied && (
+            <div className="rounded bg-blue-50 p-4">
+              <h4 className="font-medium text-gray-900 mb-2">Modification Applied</h4>
+              <p className="text-sm text-gray-700 mb-2">
+                <span className="font-medium">For criterion:</span> {iteration.modification_applied.criterion}
+              </p>
+              {iteration.modification_applied.mcp_servers_added && iteration.modification_applied.mcp_servers_added.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-sm font-medium text-gray-700">MCP Servers Added:</p>
+                  <ul className="list-disc list-inside text-xs text-gray-600">
+                    {iteration.modification_applied.mcp_servers_added.map((server: string, i: number) => (
+                      <li key={i}>{server}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {iteration.modification_applied.changes_made && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">Changes Made:</p>
+                  <ul className="space-y-1">
+                    {iteration.modification_applied.changes_made.map((change: string, i: number) => (
+                      <li key={i} className="text-xs text-gray-600">• {change}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {iteration.modification_applied.reasoning && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-600 italic">
+                    {iteration.modification_applied.reasoning}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const [criteria, setCriteria] = useState("Provide accurate information about the user's weather");
   const [isRunning, setIsRunning] = useState(false);
@@ -13,7 +115,10 @@ export default function Home() {
     setResult(null);
 
     try {
-      const response = await fetch("http://localhost:8000/api/orchestrate", {
+      console.log("Starting orchestration request...");
+      
+      // Call Next.js API route that executes Python script
+      const response = await fetch("/api/orchestrate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -23,10 +128,12 @@ export default function Home() {
         }),
       });
 
+      console.log("Response received, parsing JSON...");
       const data = await response.json();
+      console.log("Orchestration complete:", data);
       setResult(data);
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Orchestration error:", error);
       setResult({ error: "Failed to run orchestration" });
     } finally {
       setIsRunning(false);
@@ -60,10 +167,21 @@ export default function Home() {
           <button
             onClick={handleRunImprovement}
             disabled={isRunning}
-            className="mt-4 rounded-md bg-blue-600 px-6 py-2 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+            className="mt-4 rounded-md bg-blue-600 px-6 py-2 font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {isRunning ? "Running..." : "Run Improvement"}
+            {isRunning ? "Running orchestration..." : "Run Improvement"}
           </button>
+          {isRunning && (
+            <div className="mt-3 text-sm text-gray-600">
+              <div className="flex items-center space-x-2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"></div>
+                <span>Processing agent improvement (this may take 30-60 seconds)...</span>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Running conversations → Judging criteria → Simulating fixes → Merging improvements
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Results Section */}
@@ -99,37 +217,7 @@ export default function Home() {
             {result.iterations && (
               <div className="space-y-4">
                 {result.iterations.map((iteration: any, idx: number) => (
-                  <div key={idx} className="rounded-lg border bg-white p-6 shadow-sm">
-                    <h3 className="mb-3 font-semibold text-gray-900">
-                      Iteration {iteration.iteration}
-                      {iteration.all_criteria_passed && (
-                        <span className="ml-2 rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
-                          All Passed
-                        </span>
-                      )}
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <p>
-                        <span className="font-medium">Conversations:</span> {iteration.total_conversations} |{" "}
-                        <span className="font-medium">Passed:</span> {iteration.total_passed}
-                      </p>
-                      {iteration.modification_applied && (
-                        <div className="mt-3 rounded bg-gray-50 p-3">
-                          <p className="font-medium text-gray-700">Modification Applied:</p>
-                          <p className="mt-1 text-xs text-gray-600">
-                            Criterion: {iteration.modification_applied.criterion}
-                          </p>
-                          {iteration.modification_applied.changes_made && (
-                            <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-gray-600">
-                              {iteration.modification_applied.changes_made.map((change: string, i: number) => (
-                                <li key={i}>{change}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <IterationDetails key={idx} iteration={iteration} />
                 ))}
               </div>
             )}
