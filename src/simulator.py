@@ -112,6 +112,13 @@ Your task is to modify the agent's prompt to fix the issue. You can:
 - Suggest adding custom tools (Python functions)
 - Suggest adding MCP servers for external capabilities
 
+**CRITICAL REQUIREMENT FOR MCP SERVERS:**
+When you add an MCP server, you MUST also modify the agent's prompt to explicitly instruct the agent to USE those MCP tools. Simply adding the MCP server to the config is NOT enough - the agent needs explicit instructions in its prompt to actually call the MCP tools.
+
+Example: If adding open-meteo-mcp for weather:
+- DON'T just say "you have access to real-time weather data"
+- DO say "When users ask about weather, use the available weather tools to fetch real-time weather data for their location. Call the weather tools with the location parameter."
+
 IMPORTANT: When suggesting MCP servers, you MUST choose from the list below. These are the available MCP servers from the Dedalus marketplace that can be added to the agent:
 
 {AVAILABLE_MCP_SERVERS}
@@ -119,12 +126,14 @@ IMPORTANT: When suggesting MCP servers, you MUST choose from the list below. The
 When suggesting an MCP server:
 - Use the exact server name from the list above
 - Explain why this specific MCP server will help fix the failed criterion
+- **MODIFY THE PROMPT to explicitly tell the agent to USE this MCP server's tools**
+- Include specific instructions on WHEN and HOW to call the MCP tools
 - Consider the category (Search, Data, Location, Productivity, etc.) when making suggestions
 - You can suggest multiple MCP servers if they address different aspects of the failure
 
 {TOOL_ADDING_INSTRUCTIONS}
 
-Be specific and actionable in your modifications. Always consider whether adding an MCP server from the list above would help the agent meet the failed criterion."""
+Be specific and actionable in your modifications. Always consider whether adding an MCP server from the list above would help the agent meet the failed criterion. Remember: adding MCP servers without prompt instructions is useless - the agent must be told to use them."""
 
     user_prompt = f"""Analyze this failed agent conversation and fix the issue.
 
