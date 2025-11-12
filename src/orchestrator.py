@@ -1,0 +1,298 @@
+"""Orchestration module for coordinating the improvement loop.
+
+This module provides primitives for orchestrating the full improvement cycle:
+conversations → judge → simulate → merge → apply → repeat until all criteria pass.
+"""
+
+import asyncio
+from typing import List, Optional
+from dotenv import load_dotenv
+
+from .types import (
+    IterationResult,
+    OrchestrationResult,
+    AgentModification
+)
+from .conversations import create_multiple_conversations
+from .judge import judge_conversation_result
+from .simulator import simulate_fixes_from_conversations
+from .merger import merge_simulation_result
+from .config import (
+    CONVERSATION_MODEL,
+    DEFAULT_MAX_TURNS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_MODEL
+)
+
+# Load environment variables
+load_dotenv()
+
+# Constants
+DEFAULT_MAX_ITERATIONS = 5
+
+
+async def run_single_iteration(
+    current_prompt: str,
+    conversational_prompts: List[str],
+    criteria: List[str],
+    initial_message: str,
+    judge_prompt: str,
+    iteration_number: int,
+    conversation_model: str = CONVERSATION_MODEL,
+    max_turns: int = DEFAULT_MAX_TURNS,
+    temperature: float = DEFAULT_TEMPERATURE,
+    judge_model: str = DEFAULT_MODEL,
+    include_reasoning: bool = True
+):
+    """Run a single iteration of the improvement loop.
+    
+    Args:
+        current_prompt: Current base agent prompt to test
+        conversational_prompts: List of conversational agent prompts
+        criteria: List of criteria to judge against
+        initial_message: Starting message for conversations
+        judge_prompt: System prompt for judge agent
+        iteration_number: Current iteration number
+        conversation_model: Model for conversations
+        max_turns: Max turns per conversation
+        temperature: Sampling temperature
+        judge_model: Model for judging
+        include_reasoning: Include reasoning in judgments
+        
+    Returns:
+        Tuple of (IterationResult, List[Conversation]) or (None, None) if failed
+    """
+    # Step 1: Create conversations with current prompt
+    conversation_result = await create_multiple_conversations(
+        base_agent_prompt=current_prompt,
+        conversational_agent_prompts=conversational_prompts,
+        initial_message=initial_message,
+        model=conversation_model,
+        max_turns=max_turns,
+        temperature=temperature
+    )
+    
+    if not conversation_result or not conversation_result["conversations"]:
+        return None, None
+    
+    conversations = conversation_result["conversations"]
+    
+    # Step 2: Judge the conversations
+    judgment_result = await judge_conversation_result(
+        conversation_result=conversation_result,
+        criteria=criteria,
+        judge_prompt=judge_prompt,
+        model=judge_model,
+        include_reasoning=include_reasoning
+    )
+    
+    if not judgment_result:
+        return None, None
+    
+    # Extract statistics
+    stats = judgment_result["overall_statistics"]
+    total_conversations = stats["total_conversations"]
+    total_passed = stats["total_passed"]
+    all_criteria_passed = (total_passed == total_conversations)
+    
+    # Create iteration result
+    iteration_result: IterationResult = {
+        "iteration": iteration_number,
+        "prompt": current_prompt,
+        "all_criteria_passed": all_criteria_passed,
+        "total_conversations": total_conversations,
+        "total_passed": total_passed,
+        "modification_applied": None,
+        "judgment_result": judgment_result
+    }
+    
+    return iteration_result, conversations
+
+
+async def orchestrate_improvement(
+    initial_prompt: str,
+    conversational_prompts: List[str],
+    criteria: List[str],
+    initial_message: str,
+    judge_prompt: str,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    conversation_model: str = CONVERSATION_MODEL,
+    max_turns: int = DEFAULT_MAX_TURNS,
+    temperature: float = DEFAULT_TEMPERATURE,
+    judge_model: str = DEFAULT_MODEL,
+    fixer_model: str = DEFAULT_MODEL,
+    include_reasoning: bool = True
+) -> OrchestrationResult:
+    """Main orchestration loop - coordinates full improvement cycle.
+    
+    This is the main primitive for the orchestration layer. It runs the
+    improvement loop until all criteria pass or max iterations is reached.
+    
+    Loop Logic:
+    1. Run conversations with current prompt
+    2. Judge the conversations
+    3. If all criteria pass → SUCCESS, return
+    4. If any criteria fail → simulate fixes (N fixer agents in parallel)
+    5. Merge all modifications into single prompt (automatic or LLM-assisted)
+    6. Apply merged modification
+    7. Repeat from step 1 with modified prompt
+    
+    Args:
+        initial_prompt: Starting base agent prompt
+        conversational_prompts: List of conversational agent prompts
+        criteria: List of criteria to judge against
+        initial_message: Starting message for conversations
+        judge_prompt: System prompt for judge agent
+        max_iterations: Maximum number of improvement iterations
+        conversation_model: Model for conversations
+        max_turns: Max turns per conversation
+        temperature: Sampling temperature
+        judge_model: Model for judging
+        fixer_model: Model for fixer agents
+        include_reasoning: Include reasoning in judgments
+        
+    Returns:
+        OrchestrationResult with final prompt and iteration history
+    """
+    iterations: List[IterationResult] = []
+    current_prompt = initial_prompt
+    
+    for iteration in range(1, max_iterations + 1):
+        print(f"\n--- Iteration {iteration}/{max_iterations} ---")
+        
+        # Run single iteration
+        iteration_result, conversations = await run_single_iteration(
+            current_prompt=current_prompt,
+            conversational_prompts=conversational_prompts,
+            criteria=criteria,
+            initial_message=initial_message,
+            judge_prompt=judge_prompt,
+            iteration_number=iteration,
+            conversation_model=conversation_model,
+            max_turns=max_turns,
+            temperature=temperature,
+            judge_model=judge_model,
+            include_reasoning=include_reasoning
+        )
+        
+        if not iteration_result or not conversations:
+            print(f"Iteration {iteration} failed")
+            continue
+        
+        # Check if all criteria passed
+        all_passed = iteration_result["all_criteria_passed"]
+        total_passed = iteration_result["total_passed"]
+        total_conversations = iteration_result["total_conversations"]
+        
+        print(f"Result: {total_passed}/{total_conversations} conversations passed all criteria")
+        
+        # Store iteration result (without modification yet)
+        iterations.append(iteration_result)
+        
+        # If all criteria passed, we're done
+        if all_passed:
+            print("SUCCESS: All criteria passed!")
+            return {
+                "success": True,
+                "final_prompt": current_prompt,
+                "all_criteria_passed": True,
+                "iterations": iterations,
+                "total_iterations": iteration,
+                "status": f"Success after {iteration} iteration(s)"
+            }
+        
+        # Not all passed - simulate fixes
+        print("Simulating fixes for failed criteria...")
+        simulation_result = await simulate_fixes_from_conversations(
+            judgment_result=iteration_result["judgment_result"],
+            conversations=conversations,
+            base_agent_prompt=current_prompt,
+            model=fixer_model
+        )
+
+        if not simulation_result or not simulation_result["modifications"]:
+            print("No modifications generated - stopping")
+            break
+
+        num_mods = len(simulation_result["modifications"])
+        print(f"Generated {num_mods} modification(s)")
+
+        # Merge all modifications into a single prompt
+        print("Merging modifications...")
+        merge_result = await merge_simulation_result(
+            simulation_result=simulation_result,
+            original_prompt=current_prompt,
+            model=fixer_model
+        )
+
+        print(f"Merge method: {merge_result['merge_method']}")
+        if merge_result['had_conflicts']:
+            print(f"Resolved {merge_result['conflicts_resolved']} conflict(s) using LLM")
+
+        # For tracking purposes, store the first modification (or create a merged one)
+        if num_mods == 1:
+            modification = simulation_result["modifications"][0]
+        else:
+            # Create a synthetic modification representing the merge
+            modification: AgentModification = {
+                "criterion": f"Merged {num_mods} modifications",
+                "original_prompt": current_prompt,
+                "modified_prompt": merge_result["merged_prompt"],
+                "changes_made": [f"Merged {num_mods} modifications using {merge_result['merge_method']} strategy"],
+                "reasoning": f"Combined fixes for multiple failed criteria",
+                "tools_added": None,
+                "mcp_servers_added": None
+            }
+
+        print(f"Applying merged modification")
+
+        # Update iteration result with applied modification
+        iteration_result["modification_applied"] = modification
+
+        # Update current prompt for next iteration using merged result
+        current_prompt = merge_result["merged_prompt"]
+    
+    # Max iterations reached without success
+    final_iteration = iterations[-1] if iterations else None
+    all_passed = final_iteration["all_criteria_passed"] if final_iteration else False
+    
+    return {
+        "success": False,
+        "final_prompt": current_prompt,
+        "all_criteria_passed": all_passed,
+        "iterations": iterations,
+        "total_iterations": len(iterations),
+        "status": f"Max iterations ({max_iterations}) reached"
+    }
+
+
+# Synchronous wrapper for convenience
+def orchestrate_improvement_sync(
+    initial_prompt: str,
+    conversational_prompts: List[str],
+    criteria: List[str],
+    initial_message: str,
+    judge_prompt: str,
+    **kwargs
+) -> OrchestrationResult:
+    """Synchronous wrapper for orchestrate_improvement.
+    
+    Args:
+        initial_prompt: Starting base agent prompt
+        conversational_prompts: List of conversational agent prompts
+        criteria: List of criteria to judge against
+        initial_message: Starting message for conversations
+        judge_prompt: System prompt for judge agent
+        **kwargs: Additional arguments passed to orchestrate_improvement
+        
+    Returns:
+        OrchestrationResult with final prompt and iteration history
+    """
+    return asyncio.run(orchestrate_improvement(
+        initial_prompt=initial_prompt,
+        conversational_prompts=conversational_prompts,
+        criteria=criteria,
+        initial_message=initial_message,
+        judge_prompt=judge_prompt,
+        **kwargs
+    ))

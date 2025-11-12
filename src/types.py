@@ -68,3 +68,42 @@ class SimulationResult(TypedDict):
     total_issues: int
     total_fixed: int
     status: str
+
+
+class IterationResult(TypedDict):
+    """Result from a single orchestration iteration."""
+    iteration: int
+    prompt: str
+    all_criteria_passed: bool
+    total_conversations: int
+    total_passed: int
+    modification_applied: Optional[AgentModification]
+    judgment_result: JudgmentResult
+
+
+class OrchestrationResult(TypedDict):
+    """Result from full orchestration loop."""
+    success: bool
+    final_prompt: str
+    all_criteria_passed: bool
+    iterations: List[IterationResult]
+    total_iterations: int
+    status: str
+
+
+class MergeConflict(TypedDict):
+    """Information about a merge conflict."""
+    conflict_type: str  # "overlap", "large_change", "complex"
+    original_text: str
+    modification_1: str
+    modification_2: str
+    resolved_text: Optional[str]
+
+
+class MergeResult(TypedDict):
+    """Result from merging multiple modifications."""
+    merged_prompt: str
+    had_conflicts: bool
+    conflicts_resolved: int
+    merge_method: str  # "automatic", "llm_assisted", "single_modification"
+    modifications_merged: int

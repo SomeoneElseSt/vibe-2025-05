@@ -11,11 +11,14 @@ Building a backend system that orchestrates AI agents to improve their prompts t
 
 **Tech Stack**: Python, UV package manager, Dedalus Agents SDK, Pydantic
 
-**Current Completion**: 75% (3 of 4 core layers complete)
+**Current Completion**: 100% (5 of 5 core layers complete) 🎉
 - ✅ Conversations Layer
 - ✅ Judging Layer
 - ✅ Simulation Layer
-- ❌ Orchestration Layer (remaining)
+- ✅ Merge Layer
+- ✅ Orchestration Layer
+
+**Status**: FULLY FUNCTIONAL - All core functionality implemented and tested!
 
 ---
 
@@ -182,74 +185,135 @@ Building a backend system that orchestrates AI agents to improve their prompts t
 
 ---
 
+### 4. Merge Layer (`src/merger.py`)
+**Status**: ✅ Fully implemented and tested with automatic + LLM-assisted merging
+
+**What it does**: Intelligently merges multiple modifications from the simulation layer into a single coherent prompt.
+
+**Key Functions**:
+- `merge_modifications()` - Main primitive, merges multiple modifications
+- `merge_simulation_result()` - Convenience wrapper for SimulationResult
+- `llm_merge_modifications()` - LLM-assisted merge for conflicts
+
+**Input**:
+```python
+{
+    "modifications": List[AgentModification],  # From simulation layer
+    "original_prompt": str,  # Original agent prompt
+    "model": str,  # Model for LLM merges (default: "openai/gpt-4o-mini")
+    "temperature": float
+}
+```
+
+**Output** (`MergeResult`):
+```python
+{
+    "merged_prompt": str,  # Final merged prompt (ready to use)
+    "had_conflicts": bool,  # Whether conflicts were detected
+    "conflicts_resolved": int,  # Number of conflicts resolved by LLM
+    "merge_method": str,  # "single_modification", "automatic", "llm_assisted", "no_modifications"
+    "modifications_merged": int  # Number of modifications merged
+}
+```
+
+**Implementation Details**:
+- **Automatic merging** for non-conflicting changes using Python's `difflib`
+- **Conflict detection** by analyzing overlapping line changes
+- **Large change detection** (>500 chars) automatically triggers LLM
+- **LLM-assisted merging** for:
+  - Overlapping modifications
+  - Large changes (>500 chars)
+  - Complex conflicts
+- Uses **Pydantic structured outputs** for LLM merges
+- Handles 1 to N modifications gracefully
+- Returns original prompt if no modifications
+
+**Merge Strategy**:
+1. Single modification → Direct use (no merge needed)
+2. Multiple non-overlapping small changes → Automatic diff-based merge
+3. Overlapping or large changes → LLM intelligently combines both modifications
+4. No modifications → Returns original prompt unchanged
+
+**Test**: `tests/test_merger.py` - ✅ Passing (6 test cases covering all scenarios)
+
+---
+
+### 5. Orchestration Layer (`src/orchestrator.py`)
+**Status**: ✅ Fully implemented and tested with merge layer integration
+
+**What it does**: Coordinates the complete improvement cycle, iterating until all criteria pass or max iterations reached.
+
+**Key Functions**:
+- `orchestrate_improvement()` - Main primitive, runs full improvement loop
+- `orchestrate_improvement_sync()` - Synchronous wrapper
+- `run_single_iteration()` - Helper for a single iteration
+
+**Input**:
+```python
+{
+    "initial_prompt": str,  # Starting base agent prompt
+    "conversational_prompts": List[str],  # List of conversational agent prompts
+    "criteria": List[str],  # Criteria to meet
+    "initial_message": str,  # Starting message for conversations
+    "judge_prompt": str,  # System prompt for judge agent
+    "max_iterations": int,  # Max improvement iterations (default: 5)
+    "conversation_model": str,
+    "max_turns": int,
+    "temperature": float,
+    "judge_model": str,
+    "fixer_model": str,
+    "include_reasoning": bool
+}
+```
+
+**Output** (`OrchestrationResult`):
+```python
+{
+    "success": bool,  # True if all criteria passed
+    "final_prompt": str,  # Final improved prompt
+    "all_criteria_passed": bool,
+    "iterations": List[IterationResult],  # History of each iteration
+    "total_iterations": int,
+    "status": str  # Human-readable status message
+}
+```
+
+**Each IterationResult**:
+```python
+{
+    "iteration": int,
+    "prompt": str,  # Prompt used in this iteration
+    "all_criteria_passed": bool,
+    "total_conversations": int,
+    "total_passed": int,
+    "modification_applied": Optional[AgentModification],
+    "judgment_result": JudgmentResult
+}
+```
+
+**Implementation Details**:
+- **Full Loop**: Conversations → Judge → Simulate → Merge → Apply → Repeat
+- **Stop Conditions**:
+  - All conversations pass all criteria → SUCCESS
+  - Max iterations reached → Return best result
+- **Parallel Processing**:
+  - Conversations run in parallel
+  - Judgments run in parallel
+  - Fixer agents run in parallel (N agents for N failures)
+- **Merge Integration**:
+  - Uses merge layer to combine multiple modifications
+  - Automatically detects conflicts and resolves via LLM
+  - Single modification → direct use
+  - Multiple modifications → intelligent merge
+- **Iteration Tracking**: Full history with prompts, results, and modifications
+
+**Test**: `tests/test_orchestrator.py` - ✅ Passing
+
+---
+
 ## 🚧 MISSING COMPONENTS
 
-### 4. Modifier Layer (DEPRECATED - Replaced by Simulation Layer)
-**Note**: This was originally planned but the simulation layer fulfills this role.
-**Purpose**: Analyzes failed judgments and modifies agent prompts/tools to improve performance.
-
-**Requirements**:
-- Takes `JudgmentResult` as input
-- Identifies which criteria failed and why
-- Uses an LLM to suggest prompt improvements
-- Returns modified agent configuration
-
-**Suggested Input**:
-```python
-{
-    "judgment_result": JudgmentResult,
-    "base_agent_prompt": str,  # Current prompt
-    "modifier_prompt": str,  # System prompt for modifier agent
-    "modification_strategy": str  # e.g., "add_instruction", "rephrase", "add_examples"
-}
-```
-
-**Suggested Output**:
-```python
-{
-    "modified_prompt": str,
-    "changes_made": List[str],  # Description of changes
-    "reasoning": str
-}
-```
-
----
-
-### 5. Orchestration Loop (NOT STARTED)
-**Purpose**: Coordinates the full improvement cycle until threshold is met.
-
-**Requirements**:
-- Loop: Conversations → Judge → Simulate → Apply Modifications → Repeat
-- Stop conditions:
-  - Pass rate >= threshold (e.g., 80%)
-  - Max iterations reached (e.g., 5)
-- Track improvement over iterations
-- Save results/history
-- Apply the best modification from simulation layer
-
-**Suggested Function**:
-```python
-async def orchestrate_improvement(
-    initial_agent_prompt: str,
-    conversational_prompts: List[str],
-    criteria: List[str],
-    initial_message: str,
-    target_pass_rate: float = 0.8,
-    max_iterations: int = 5
-) -> OrchestrationResult
-```
-
-**Note**: Now that simulation layer exists, orchestrator should:
-1. Run conversations with current prompt
-2. Judge the conversations
-3. If pass rate < threshold, run simulation to get modifications
-4. Select best modification (or merge modifications)
-5. Apply modification to prompt
-6. Repeat until threshold met or max iterations
-
----
-
-### 6. File Manager (NOT STARTED)
+### 6. File Manager (NOT STARTED - OPTIONAL)
 **Purpose**: Load/save agent configurations from/to files.
 
 **Requirements**:
@@ -267,20 +331,23 @@ async def orchestrate_improvement(
 vibe-2025-5/
 ├── src/
 │   ├── __init__.py              ✅ Exports all public APIs
-│   ├── types.py                 ✅ TypedDict definitions (extended with simulation types)
+│   ├── types.py                 ✅ TypedDict definitions (all layers)
 │   ├── config.py                ✅ Constants, env vars, MCP servers, tool instructions
-│   ├── conversations.py         ✅ COMPLETE
+│   ├── conversations.py         ✅ COMPLETE (with structured outputs)
 │   ├── judge.py                 ✅ COMPLETE (with structured outputs)
 │   ├── simulator.py             ✅ COMPLETE (with structured outputs)
-│   ├── orchestrator.py          ❌ TODO
-│   └── file_manager.py          ❌ TODO (optional)
+│   ├── merger.py                ✅ COMPLETE (automatic + LLM-assisted)
+│   ├── orchestrator.py          ✅ COMPLETE (with merge layer integration)
+│   └── file_manager.py          ⚪ OPTIONAL (not required for core functionality)
 ├── tests/                       ✅ In .gitignore
 │   ├── test_conversations.py    ✅ Passing
 │   ├── test_judge.py            ✅ Passing
-│   └── test_simulator.py        ✅ Passing
+│   ├── test_simulator.py        ✅ Passing
+│   ├── test_merger.py           ✅ Passing (6 test cases)
+│   └── test_orchestrator.py     ✅ Passing
 ├── .env                         ✅ Has DEDALUS_API_KEY
 ├── .gitignore                   ✅ Configured
-├── AGENTS.md                    📝 This file
+├── AGENTS.md                    📝 This file (complete project documentation)
 └── DEDALUS.md                   ✅ Complete Dedalus SDK docs
 ```
 
@@ -310,11 +377,15 @@ vibe-2025-5/
    Input: JudgmentResult + conversations + base_prompt → Output: SimulationResult
    (Contains N modifications, one per failed criterion)
 
-4. [TODO] Orchestrator:
-   - Select best modification from SimulationResult
-   - Apply to base_prompt
+4. Merge Layer:
+   Input: SimulationResult + original_prompt → Output: MergeResult
+   (Combines N modifications into single prompt)
+
+5. Orchestrator:
+   - Coordinates layers 1-4 in a loop
+   - Applies merged modification to base_prompt
    - Loop back to step 1 with modified_prompt
-   - Continue until pass_rate >= threshold or max_iterations
+   - Continue until all criteria pass or max_iterations
 ```
 
 ### Structured Outputs Implementation
@@ -516,28 +587,29 @@ New prompt: You are a helpful customer service agent. Your goal is to...
 ## 📊 PROJECT METRICS
 
 **Code Statistics**:
-- Total source files: 4 (`conversations.py`, `judge.py`, `simulator.py`, `types.py`)
-- Total test files: 3 (all passing)
-- Lines of code: ~1000+ LOC
-- Test coverage: 3 of 3 layers tested
+- Total source files: 5 (`conversations.py`, `judge.py`, `simulator.py`, `merger.py`, `orchestrator.py`)
+- Total test files: 5 (all passing ✅)
+- Lines of code: ~1500+ LOC
+- Test coverage: 100% of core layers tested
 
 **Architecture Quality**:
 - ✅ Separation of concerns (each layer is independent)
 - ✅ Type safety (TypedDict + Pydantic everywhere)
 - ✅ Error handling (try/catch with early returns)
 - ✅ Flat code (minimal nesting)
-- ✅ Parallel execution (asyncio.gather)
+- ✅ Parallel execution (asyncio.gather throughout)
 - ✅ Reusable primitives (each function does one thing well)
+- ✅ Composable layers (can be used independently or together)
 
 **What's Working**:
-1. Conversations generate realistic multi-turn dialogues
-2. Judge accurately evaluates criteria (66.7% realistic pass rate)
-3. Simulation identifies failures and suggests specific fixes
-4. All structured outputs are 100% reliable (no JSON parsing)
-5. Parallel execution provides good performance
+1. ✅ Conversations generate realistic multi-turn dialogues
+2. ✅ Judge accurately evaluates criteria with structured outputs
+3. ✅ Simulation identifies failures and spawns parallel fixer agents
+4. ✅ Merge intelligently combines modifications (automatic + LLM)
+5. ✅ Orchestrator coordinates full improvement loop
+6. ✅ All structured outputs are 100% reliable (no JSON parsing)
+7. ✅ Parallel execution throughout for maximum performance
+8. ✅ Complete iteration tracking and metrics
 
-**What's Missing**:
-1. Orchestration loop to tie everything together
-2. Logic to select/merge multiple modifications
-3. Iteration tracking and improvement metrics
-4. File I/O for saving/loading agent configs (optional)
+**What's Optional**:
+1. ⚪ File I/O for saving/loading agent configs (not needed for core functionality)
