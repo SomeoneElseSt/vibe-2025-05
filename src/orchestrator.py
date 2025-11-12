@@ -5,6 +5,7 @@ conversations → judge → simulate → merge → apply → repeat until all cr
 """
 
 import asyncio
+import sys
 from typing import List, Optional
 from dotenv import load_dotenv
 
@@ -163,7 +164,7 @@ async def orchestrate_improvement(
     current_prompt = initial_prompt
     
     for iteration in range(1, max_iterations + 1):
-        print(f"\n--- Iteration {iteration}/{max_iterations} ---")
+        print(f"\n--- Iteration {iteration}/{max_iterations} ---", file=sys.stderr)
         
         # Run single iteration
         iteration_result, conversations = await run_single_iteration(
@@ -181,7 +182,7 @@ async def orchestrate_improvement(
         )
         
         if not iteration_result or not conversations:
-            print(f"Iteration {iteration} failed")
+            print(f"Iteration {iteration} failed", file=sys.stderr)
             continue
         
         # Check if all criteria passed
@@ -189,14 +190,14 @@ async def orchestrate_improvement(
         total_passed = iteration_result["total_passed"]
         total_conversations = iteration_result["total_conversations"]
         
-        print(f"Result: {total_passed}/{total_conversations} conversations passed all criteria")
+        print(f"Result: {total_passed}/{total_conversations} conversations passed all criteria", file=sys.stderr)
         
         # Store iteration result (without modification yet)
         iterations.append(iteration_result)
         
         # If all criteria passed, we're done
         if all_passed:
-            print("SUCCESS: All criteria passed!")
+            print("SUCCESS: All criteria passed!", file=sys.stderr)
             return {
                 "success": True,
                 "final_prompt": current_prompt,
@@ -207,7 +208,7 @@ async def orchestrate_improvement(
             }
         
         # Not all passed - simulate fixes
-        print("Simulating fixes for failed criteria...")
+        print("Simulating fixes for failed criteria...", file=sys.stderr)
         simulation_result = await simulate_fixes_from_conversations(
             judgment_result=iteration_result["judgment_result"],
             conversations=conversations,
@@ -216,23 +217,23 @@ async def orchestrate_improvement(
         )
 
         if not simulation_result or not simulation_result["modifications"]:
-            print("No modifications generated - stopping")
+            print("No modifications generated - stopping", file=sys.stderr)
             break
 
         num_mods = len(simulation_result["modifications"])
-        print(f"Generated {num_mods} modification(s)")
+        print(f"Generated {num_mods} modification(s)", file=sys.stderr)
 
         # Merge all modifications into a single prompt
-        print("Merging modifications...")
+        print("Merging modifications...", file=sys.stderr)
         merge_result = await merge_simulation_result(
             simulation_result=simulation_result,
             original_prompt=current_prompt,
             model=fixer_model
         )
 
-        print(f"Merge method: {merge_result['merge_method']}")
+        print(f"Merge method: {merge_result['merge_method']}", file=sys.stderr)
         if merge_result['had_conflicts']:
-            print(f"Resolved {merge_result['conflicts_resolved']} conflict(s) using LLM")
+            print(f"Resolved {merge_result['conflicts_resolved']} conflict(s) using LLM", file=sys.stderr)
 
         # For tracking purposes, store the first modification (or create a merged one)
         if num_mods == 1:
@@ -249,7 +250,7 @@ async def orchestrate_improvement(
                 "mcp_servers_added": None
             }
 
-        print(f"Applying merged modification")
+        print(f"Applying merged modification", file=sys.stderr)
 
         # Update iteration result with applied modification
         iteration_result["modification_applied"] = modification
@@ -334,32 +335,145 @@ async def orchestrate_improvement_with_file(
     output_file = output_file or initial_agent_file
 
     # Read initial agent file
-    print(f"Reading initial agent file: {initial_agent_file}")
+    print(f"Reading initial agent file: {initial_agent_file}", file=sys.stderr, flush=True)
     agent_config = read_agent_file(initial_agent_file)
     current_prompt = agent_config["prompt"]
-    current_file = initial_agent_file
+    
+    print(f"Initial prompt: {current_prompt[:100]}...", file=sys.stderr, flush=True)
+    print(f"Initial MCPs: {agent_config.get('mcp_servers', [])}", file=sys.stderr, flush=True)
+    print(f"Initial tools: {agent_config.get('tools', [])}", file=sys.stderr, flush=True)
 
-    print(f"Initial prompt: {current_prompt[:100]}...")
-    print(f"Initial MCPs: {agent_config.get('mcp_servers', [])}")
-    print(f"Initial tools: {agent_config.get('tools', [])}")
+    # Track accumulated MCP servers and tools across iterations
+    accumulated_mcps = list(agent_config.get('mcp_servers', []))
+    accumulated_tools = []
+    current_file_path = initial_agent_file
 
-    # Run the regular orchestration loop
-    result = await orchestrate_improvement(
-        initial_prompt=current_prompt,
-        conversational_prompts=conversational_prompts,
-        criteria=criteria,
-        initial_message=initial_message,
-        judge_prompt=judge_prompt,
-        max_iterations=max_iterations,
-        **kwargs
-    )
+    # Run orchestration loop iteration by iteration with file updates
+    iterations: List[IterationResult] = []
+    
+    for iteration_num in range(1, max_iterations + 1):
+        print(f"\n{'='*60}", file=sys.stderr, flush=True)
+        print(f"FILE-BASED ITERATION {iteration_num}/{max_iterations}", file=sys.stderr, flush=True)
+        print(f"{'='*60}", file=sys.stderr, flush=True)
+        print(f"Using file: {current_file_path}", file=sys.stderr, flush=True)
+        print(f"Current MCPs: {accumulated_mcps}", file=sys.stderr, flush=True)
+        print(f"Current prompt (first 100 chars): {current_prompt[:100]}...", file=sys.stderr, flush=True)
+        
+        # Run ONE iteration
+        iteration_result, conversations = await run_single_iteration(
+            current_prompt=current_prompt,
+            conversational_prompts=conversational_prompts,
+            criteria=criteria,
+            initial_message=initial_message,
+            judge_prompt=judge_prompt,
+            iteration_number=iteration_num,
+            **kwargs
+        )
+        
+        if not iteration_result or not conversations:
+            print(f"Iteration {iteration_num} failed", file=sys.stderr, flush=True)
+            break
+        
+        all_passed = iteration_result["all_criteria_passed"]
+        
+        # Store iteration
+        iterations.append(iteration_result)
+        
+        print(f"Iteration {iteration_num} result: {iteration_result['total_passed']}/{iteration_result['total_conversations']} passed", file=sys.stderr, flush=True)
+        
+        if all_passed:
+            print("SUCCESS: All criteria passed!", file=sys.stderr, flush=True)
+            break
+        
+        # Get fixes
+        print("Simulating fixes...", file=sys.stderr, flush=True)
+        simulation_result = await simulate_fixes_from_conversations(
+            judgment_result=iteration_result["judgment_result"],
+            conversations=conversations,
+            base_agent_prompt=current_prompt,
+            **{k: v for k, v in kwargs.items() if k in ['model', 'temperature']}
+        )
+        
+        if not simulation_result or not simulation_result["modifications"]:
+            print("No modifications generated", file=sys.stderr, flush=True)
+            break
+        
+        # Merge modifications
+        print(f"Merging {len(simulation_result['modifications'])} modification(s)...", file=sys.stderr, flush=True)
+        merge_result = await merge_simulation_result(
+            simulation_result=simulation_result,
+            original_prompt=current_prompt,
+            **{k: v for k, v in kwargs.items() if k in ['model', 'temperature']}
+        )
+        
+        print(f"Merge method: {merge_result['merge_method']}", file=sys.stderr, flush=True)
+        
+        # Track ONE modification for iteration result
+        if simulation_result["modifications"]:
+            iteration_result["modification_applied"] = simulation_result["modifications"][0]
+        
+        # Accumulate MCPs and tools from ALL modifications
+        for mod in simulation_result["modifications"]:
+            if mod.get("mcp_servers_added"):
+                for mcp in mod["mcp_servers_added"]:
+                    if mcp not in accumulated_mcps:
+                        accumulated_mcps.append(mcp)
+                        print(f"  + Adding MCP: {mcp}", file=sys.stderr, flush=True)
+            if mod.get("tools_added"):
+                for tool in mod["tools_added"]:
+                    if tool not in accumulated_tools:
+                        accumulated_tools.append(tool)
+                        print(f"  + Adding tool: {tool}", file=sys.stderr, flush=True)
+        
+        # Update prompt
+        current_prompt = merge_result["merged_prompt"]
+        
+        # Write improved file with accumulated MCPs/tools
+        print(f"\nWriting improved file to: {output_file}", file=sys.stderr, flush=True)
+        print(f"  Prompt (first 100 chars): {current_prompt[:100]}...", file=sys.stderr, flush=True)
+        print(f"  MCPs to write: {accumulated_mcps}", file=sys.stderr, flush=True)
+        print(f"  Tools to write: {accumulated_tools}", file=sys.stderr, flush=True)
+        
+        tool_defs = [{"name": t, "description": f"Tool for {t}"} for t in accumulated_tools]
+        
+        write_agent_file(
+            file_path=output_file,
+            prompt=current_prompt,
+            tools=tool_defs if tool_defs else None,
+            mcp_servers=accumulated_mcps if accumulated_mcps else None
+        )
+        
+        # CRITICAL: Update current_file_path to point to improved file for next iteration
+        current_file_path = output_file
+        
+        # Verify what was written
+        written_config = read_agent_file(output_file)
+        print(f"\nVERIFYING WRITTEN FILE:", file=sys.stderr, flush=True)
+        print(f"  Read prompt (first 100 chars): {written_config['prompt'][:100]}...", file=sys.stderr, flush=True)
+        print(f"  Read MCPs: {written_config.get('mcp_servers', [])}", file=sys.stderr, flush=True)
+        print(f"  Read tools: {written_config.get('tools', [])}", file=sys.stderr, flush=True)
+    
+    # Build result
+    all_passed = iterations[-1]["all_criteria_passed"] if iterations else False
+    
+    result: OrchestrationResult = {
+        "success": all_passed,
+        "final_prompt": current_prompt,
+        "all_criteria_passed": all_passed,
+        "iterations": iterations,
+        "total_iterations": len(iterations),
+        "status": f"Success after {len(iterations)} iteration(s)" if all_passed else f"Max iterations ({max_iterations}) reached",
+        "final_agent_file": output_file
+    }
+    
+    return result
 
     # If modifications were made, write the final file
     if result["iterations"]:
         final_iteration = result["iterations"][-1]
 
         if final_iteration.get("modification_applied"):
-            print(f"\nWriting final agent file to: {output_file}")
+            print(f"\nWriting final agent file to: {output_file}", file=sys.stderr)
             modification = final_iteration["modification_applied"]
 
             # Collect all tools and MCPs from all iterations
@@ -389,9 +503,9 @@ async def orchestrate_improvement_with_file(
                 mcp_servers=all_mcps if all_mcps else None
             )
 
-            print(f"✅ Final agent file written successfully")
-            print(f"   Tools added: {all_tools}")
-            print(f"   MCPs added: {all_mcps}")
+            print(f"✅ Final agent file written successfully", file=sys.stderr)
+            print(f"   Tools added: {all_tools}", file=sys.stderr)
+            print(f"   MCPs added: {all_mcps}", file=sys.stderr)
 
             result["final_agent_file"] = final_file
         else:

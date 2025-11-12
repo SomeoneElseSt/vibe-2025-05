@@ -4,6 +4,7 @@ This module provides primitives for evaluating conversations against criteria.
 """
 
 import asyncio
+import sys
 from typing import List, Optional, Dict
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -100,6 +101,9 @@ For each criterion, determine if it was met (true/false).
 {reasoning_instruction}"""
 
     try:
+        print(f"\nJUDGING CONVERSATION...", file=sys.stderr, flush=True)
+        print(f"Criteria: {criteria}", file=sys.stderr, flush=True)
+        
         # Use structured output with Pydantic model
         completion = await client.chat.completions.parse(
             model=model,
@@ -116,6 +120,13 @@ For each criterion, determine if it was met (true/false).
 
         if not parsed_response:
             return None
+        
+        print(f"\nJUDGMENT RESULTS:", file=sys.stderr, flush=True)
+        for eval_item in parsed_response.evaluations:
+            status = "✓ PASS" if eval_item.met else "✗ FAIL"
+            print(f"  {status}: {eval_item.criterion}", file=sys.stderr, flush=True)
+            if eval_item.reasoning:
+                print(f"    Reasoning: {eval_item.reasoning}", file=sys.stderr, flush=True)
 
         # Convert to our internal format
         criteria_scores: List[CriterionScore] = []
@@ -139,7 +150,7 @@ For each criterion, determine if it was met (true/false).
         return judgment
 
     except Exception as e:
-        print(f"Error judging conversation: {e}")
+        print(f"Error judging conversation: {e}", file=sys.stderr)
         return None
 
 
@@ -189,7 +200,7 @@ async def judge_multiple_conversations(
         # Process results
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"Judgment {i} failed with exception: {result}")
+                print(f"Judgment {i} failed with exception: {result}", file=sys.stderr)
                 continue
             if result is not None:
                 result["conversation_index"] = i

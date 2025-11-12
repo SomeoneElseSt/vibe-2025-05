@@ -5,6 +5,7 @@ modifications to agent prompts and tools.
 """
 
 import asyncio
+import sys
 from typing import List, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -146,6 +147,11 @@ Please provide:
 5. Any MCP servers that should be added (optional)"""
 
     try:
+        print(f"\n{'~'*60}", file=sys.stderr, flush=True)
+        print(f"FIXER AGENT: Analyzing failed criterion", file=sys.stderr, flush=True)
+        print(f"Criterion: {task['criterion']}", file=sys.stderr, flush=True)
+        print(f"{'~'*60}", file=sys.stderr, flush=True)
+        
         # Use structured output with Pydantic model
         completion = await client.chat.completions.parse(
             model=model,
@@ -162,6 +168,23 @@ Please provide:
 
         if not parsed_response:
             return None
+        
+        print(f"\nFIXER SUGGESTED CHANGES:", file=sys.stderr, flush=True)
+        for change in parsed_response.changes_made:
+            print(f"  - {change}", file=sys.stderr, flush=True)
+        
+        if parsed_response.mcp_servers_to_add:
+            print(f"\nMCP SERVERS TO ADD:", file=sys.stderr, flush=True)
+            for server in parsed_response.mcp_servers_to_add:
+                print(f"  + {server.server_name}: {server.reason}", file=sys.stderr, flush=True)
+        
+        if parsed_response.tools_to_add:
+            print(f"\nTOOLS TO ADD:", file=sys.stderr, flush=True)
+            for tool in parsed_response.tools_to_add:
+                print(f"  + {tool.name}: {tool.purpose}", file=sys.stderr, flush=True)
+        
+        print(f"\nREASONING: {parsed_response.reasoning}", file=sys.stderr, flush=True)
+        print(f"{'~'*60}\n", file=sys.stderr, flush=True)
 
         # Extract tool names and MCP server names
         tools_added = None
@@ -186,7 +209,7 @@ Please provide:
         return modification
 
     except Exception as e:
-        print(f"Error fixing issue for criterion '{task['criterion']}': {e}")
+        print(f"Error fixing issue for criterion '{task['criterion']}': {e}", file=sys.stderr)
         return None
 
 
@@ -228,7 +251,6 @@ async def simulate_fixes(
         if not judgment["overall_pass"]:
             # Find the conversation index
             conv_idx = judgment["conversation_index"]
-            conversation = judgment_result["judgments"][conv_idx]["conversation_index"]  # This will be set by caller
 
             # For each failed criterion in this conversation
             for score in judgment["criteria_scores"]:
@@ -236,7 +258,7 @@ async def simulate_fixes(
                     task: FixerTask = {
                         "criterion": score["criterion"],
                         "reasoning": score["reasoning"],
-                        "conversation": None,  # Will be set by caller
+                        "conversation": None,  # Will be set by caller (simulate_fixes_from_conversations)
                         "conversation_index": conv_idx
                     }
                     tasks.append(task)
@@ -271,7 +293,7 @@ async def simulate_fixes(
         # Process results
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"Fixer {i} failed with exception: {result}")
+                print(f"Fixer {i} failed with exception: {result}", file=sys.stderr)
                 continue
             if result is not None:
                 modifications.append(result)
@@ -370,7 +392,7 @@ async def simulate_fixes_from_conversations(
         # Process results
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"Fixer {i} failed with exception: {result}")
+                print(f"Fixer {i} failed with exception: {result}", file=sys.stderr)
                 continue
             if result is not None:
                 modifications.append(result)

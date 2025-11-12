@@ -13,7 +13,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src import orchestrate_improvement_with_file_sync
+from src import orchestrate_improvement_with_file
 
 app = FastAPI(title="Agent Orchestration API")
 
@@ -58,8 +58,8 @@ async def orchestrate(request: OrchestrationRequest):
     judge_prompt = "You are an expert evaluator of weather assistant conversations."
     
     try:
-        # Run synchronous orchestration
-        result = orchestrate_improvement_with_file_sync(
+        # Run async orchestration
+        result = await orchestrate_improvement_with_file(
             initial_agent_file=initial_agent_file,
             conversational_prompts=conversational_prompts,
             criteria=request.criteria,
@@ -73,6 +73,9 @@ async def orchestrate(request: OrchestrationRequest):
         return result
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"ERROR: {error_details}")  # This will show in FastAPI logs
         raise HTTPException(status_code=500, detail=f"Orchestration failed: {str(e)}")
 
 

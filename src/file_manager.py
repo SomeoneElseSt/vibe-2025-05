@@ -4,6 +4,7 @@ This module handles reading/writing actual Dedalus agent Python files,
 including prompt updates, tool definitions, and MCP server configurations.
 """
 
+import sys
 from typing import List, Optional, Dict
 from pathlib import Path
 
@@ -124,7 +125,7 @@ async def run_agent(user_message: str) -> str:
 async def main():
     """Example usage of the agent."""
     response = await run_agent("Hello, how can you help me?")
-    print(f"Agent: {{response}}")
+    print(f"Agent: {{response}}", file=sys.stderr)
 
 
 if __name__ == "__main__":

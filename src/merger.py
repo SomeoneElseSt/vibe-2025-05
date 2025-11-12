@@ -5,6 +5,7 @@ handling conflicts automatically or using LLM assistance when needed.
 """
 
 import difflib
+import sys
 from typing import List, Optional, Tuple
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -271,7 +272,7 @@ Please create a merged prompt that incorporates the best aspects of both modific
         return parsed_response.merged_prompt
 
     except Exception as e:
-        print(f"Error in LLM merge: {e}")
+        print(f"Error in LLM merge: {e}", file=sys.stderr)
         return None
 
 
@@ -369,7 +370,7 @@ async def merge_modifications(
                 conflicts_resolved += 1
             else:
                 # If LLM merge fails, just use the latest modification
-                print(f"Warning: LLM merge failed for modification {i}, using latest")
+                print(f"Warning: LLM merge failed for modification {i}, using latest", file=sys.stderr)
                 current_merged = mod_current["modified_prompt"]
 
     # Determine merge method

@@ -6,6 +6,7 @@ and multiple conversational agents with different prompts.
 
 import asyncio
 import os
+import sys
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 from dedalus_labs import AsyncDedalus, DedalusRunner
@@ -49,8 +50,15 @@ async def create_conversation(
     current_message = initial_message
     current_role = "conversational_agent"
 
+    print(f"\n{'='*60}", file=sys.stderr, flush=True)
+    print(f"STARTING CONVERSATION", file=sys.stderr, flush=True)
+    print(f"{'='*60}", file=sys.stderr, flush=True)
+    print(f"Initial message: {initial_message}", file=sys.stderr, flush=True)
+    print(f"Max turns: {max_turns}", file=sys.stderr, flush=True)
+
     try:
         for turn in range(max_turns):
+            print(f"\n--- Turn {turn + 1}/{max_turns} ({current_role}) ---", file=sys.stderr, flush=True)
             # Determine which agent speaks
             if current_role == "conversational_agent":
                 system_prompt = conversational_agent_prompt
@@ -100,11 +108,13 @@ async def create_conversation(
                 "content": response
             })
 
+            print(f"Response: {response[:200]}{'...' if len(response) > 200 else ''}", file=sys.stderr, flush=True)
+
             # Prepare for next turn
             current_message = response
             current_role = next_role
 
-        return {
+        conversation = {
             "messages": messages,
             "metadata": {
                 "turns": len(messages),
@@ -114,9 +124,15 @@ async def create_conversation(
                 "conversational_agent_prompt": conversational_agent_prompt
             }
         }
+        
+        print(f"\n{'='*60}", file=sys.stderr, flush=True)
+        print(f"CONVERSATION COMPLETE - {len(messages)} messages", file=sys.stderr, flush=True)
+        print(f"{'='*60}\n", file=sys.stderr, flush=True)
+        
+        return conversation
 
     except Exception as e:
-        print(f"Error creating conversation: {e}")
+        print(f"Error creating conversation: {e}", file=sys.stderr, flush=True)
         return None
 
 
@@ -173,7 +189,7 @@ async def create_multiple_conversations(
         # Filter out None and exceptions
         for result in results:
             if isinstance(result, Exception):
-                print(f"Conversation failed with exception: {result}")
+                print(f"Conversation failed with exception: {result}", file=sys.stderr)
                 continue
             if result is not None:
                 conversations.append(result)
