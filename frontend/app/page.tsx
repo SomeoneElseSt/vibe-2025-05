@@ -51,7 +51,7 @@ function IterationDetails({ iteration }: { iteration: any }) {
               <div className="mt-3 space-y-3">
                 {iteration.judgment_result.judgments.map((judgment: any, jIdx: number) => {
                   // Get the actual conversation from the iteration data
-                  const conversations = iteration.judgment_result?.conversations || [];
+                  const conversations = iteration.conversations || [];
                   const conversation = conversations[jIdx];
                   
                   return (
@@ -180,7 +180,7 @@ function IterationDetails({ iteration }: { iteration: any }) {
 }
 
 export default function Home() {
-  const [criteria, setCriteria] = useState("Provide accurate information about the user's weather");
+  const [criteria, setCriteria] = useState("Provide real-time, current weather data including specific temperatures and conditions");
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [showDeployPopup, setShowDeployPopup] = useState(false);

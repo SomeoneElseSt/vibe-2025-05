@@ -79,6 +79,7 @@ class IterationResult(TypedDict):
     total_passed: int
     modification_applied: Optional[AgentModification]
     judgment_result: JudgmentResult
+    conversations: Optional[List[Conversation]]  # Added for frontend display
 
 
 class OrchestrationResult(TypedDict):

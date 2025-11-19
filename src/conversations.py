@@ -46,9 +46,9 @@ async def create_conversation(
     client = AsyncDedalus()
     messages: List[Message] = []
 
-    # Start with initial message from conversational agent
+    # Start with initial message from user - base agent should respond first
     current_message = initial_message
-    current_role = "conversational_agent"
+    current_role = "base_agent"  # Base agent responds to initial user message
 
     print(f"\n{'='*60}", file=sys.stderr, flush=True)
     print(f"STARTING CONVERSATION", file=sys.stderr, flush=True)

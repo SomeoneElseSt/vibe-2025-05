@@ -111,7 +111,8 @@ async def run_single_iteration(
         "total_conversations": total_conversations,
         "total_passed": total_passed,
         "modification_applied": None,
-        "judgment_result": judgment_result
+        "judgment_result": judgment_result,
+        "conversations": conversations  # Include conversations for frontend display
     }
     
     return iteration_result, conversations

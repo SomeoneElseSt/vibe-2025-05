@@ -10,6 +10,10 @@ import json
 import asyncio
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load env from src/.env
+load_dotenv("src/.env")
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -34,11 +38,11 @@ async def run_orchestration(criteria: list[str]) -> dict:
     output_file = "demo/weather_agent_improved.py"
     
     conversational_prompts = [
-        "You are a user asking about the weather. Be conversational."
+        "You are a user asking about current, real-time weather. When asked for your location, specify San Francisco."
     ]
     
-    initial_message = "What's the weather like today?"
-    judge_prompt = "You are an expert evaluator of weather assistant conversations."
+    initial_message = "What's the current weather in San Francisco right now?"
+    judge_prompt = "You are an expert evaluator of weather assistant conversations. Focus on whether the agent provides REAL-TIME, CURRENT weather data (temperatures, conditions), not general patterns or historical information."
     
     print(f"Evaluating agent against {len(criteria)} criteria", file=sys.stderr, flush=True)
     print("Running improvement loop (max 3 iterations)...", file=sys.stderr, flush=True)
@@ -57,7 +61,7 @@ async def run_orchestration(criteria: list[str]) -> dict:
             judge_prompt=judge_prompt,
             output_file=output_file,
             max_iterations=3,
-            max_turns=2
+            max_turns=6
         )
     finally:
         # Restore stdout

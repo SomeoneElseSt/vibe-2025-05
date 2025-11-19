@@ -20,7 +20,7 @@ AVAILABLE_MCP_SERVERS = """
 Available MCP Servers from Dedalus Marketplace:
 
 SEARCH & DISCOVERY:
-- brave-search-mcp - Integrate web search and local search capabilities with Brave
+- tsion/brave-search-mcp - Integrate web search and local search capabilities with Brave
 - sonar - Enable AI assistants to perform web searches using Perplexity's Sonar Pro
 - exa-search-mcp - Fast, intelligent web search and crawling
 - exa-mcp - Fast, intelligent web search and crawling
@@ -55,7 +55,7 @@ DEVELOPER TOOLS:
 - mcp-server-example-python - Example MCP server implementation
 
 UTILITIES:
-- open-meteo-mcp - Weather and meteorological data
+- cathy-di/open-meteo-mcp - Weather and meteorological data
 - general-mcp - Essential time and date utility for AI agents requiring temporal context
 - ffmpeg-mcp - Media processing and conversion
 - cat-facts - Fun facts and trivia

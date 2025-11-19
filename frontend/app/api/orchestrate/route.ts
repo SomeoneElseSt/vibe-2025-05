@@ -20,12 +20,14 @@ export async function POST(request: NextRequest) {
     // Path to Python script (in project root)
     const scriptPath = path.join(process.cwd(), '..', 'run_orchestration.py');
     const workingDir = path.join(process.cwd(), '..');
+    // Use virtual environment Python
+    const pythonPath = path.join(workingDir, '.venv', 'bin', 'python3');
     
     // Create input JSON
     const inputJson = JSON.stringify({ criteria });
     
-    // Execute Python script with stdin
-    const child = require('child_process').spawn('python3', [scriptPath], {
+    // Execute Python script with stdin using venv Python
+    const child = require('child_process').spawn(pythonPath, [scriptPath], {
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe']
     });

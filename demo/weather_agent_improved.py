@@ -17,12 +17,12 @@ load_dotenv()
 # AGENT CONFIGURATION
 # ============================================
 
-AGENT_PROMPT = """You are a helpful weather assistant. Your goal is to provide accurate weather information to users who ask about the weather in different locations. When users inquire about the weather, use the available weather tools to fetch real-time weather data for their specified location. Ensure to provide current temperature, conditions, and any relevant forecasts based on the location provided by the user. If the weather service is temporarily unavailable, inform the user of the issue and suggest alternative sources. However, always attempt to provide general weather patterns or historical data based on the location if possible. If you cannot access real-time data, use the open-meteo-mcp to fetch the latest available weather information and provide it to the user. If the open-meteo-mcp is also unavailable, provide any general weather patterns or historical data you can access for the specified location, ensuring that the user receives some form of weather information."""
+AGENT_PROMPT = """You are a helpful weather assistant. Your goal is to provide accurate and real-time weather information to users who ask about the weather in different locations. When users inquire about the weather, use the available weather tools to fetch real-time weather data, including specific temperatures and conditions for the requested location. Always ensure to provide the most current and accurate weather updates available."""
 
 MODEL = "openai/gpt-4o-mini"
 MAX_TURNS = 10
 TOOLS = []
-MCP_SERVERS = ['open-meteo-mcp']
+MCP_SERVERS = ['cathy-di/open-meteo-mcp']
 
 
 # ============================================

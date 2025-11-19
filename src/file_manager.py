@@ -5,7 +5,8 @@ including prompt updates, tool definitions, and MCP server configurations.
 """
 
 import sys
-from typing import List, Optional, Dict
+import ast
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 
@@ -24,7 +25,7 @@ def generate_tool_code(tool_name: str, tool_description: str) -> str:
     """{tool_description}"""
     # TODO: Implement {tool_name} functionality
     return f"Executed {tool_name} with query: {{query}}"
-'''
+    '''
     return function_code
 
 
@@ -65,7 +66,9 @@ def generate_agent_file(
     mcp_list = str(mcp_servers) if mcp_servers else "[]"
 
     # Escape the prompt for Python string literal
-    prompt_escaped = prompt.replace('"""', r'\"\"\"').replace('\\', r'\\')
+    # CRITICAL: Escape backslashes FIRST, then triple quotes
+    # This ensures that existing backslashes are preserved, and new escapes for quotes don't get double-escaped
+    prompt_escaped = prompt.replace('\\', r'\\').replace('"""', r'\"\"\"')
 
     # Generate complete file
     file_content = f'''"""Dedalus Agent - Auto-generated"""
@@ -173,8 +176,11 @@ def write_agent_file(
     return file_path
 
 
-def read_agent_file(file_path: str) -> Dict[str, any]:
+def read_agent_file(file_path: str) -> Dict[str, Any]:
     """Read a Dedalus agent file and extract configuration.
+
+    Uses Python AST to safely parse the file and extract variables,
+    handling string escaping and formatting correctly.
 
     Args:
         file_path: Path to the agent file
@@ -189,31 +195,56 @@ def read_agent_file(file_path: str) -> Dict[str, any]:
     with open(file_path, 'r') as f:
         content = f.read()
 
-    # Simple parsing - extract the AGENT_PROMPT
     prompt = ""
-    if 'AGENT_PROMPT = """' in content:
-        start = content.index('AGENT_PROMPT = """') + len('AGENT_PROMPT = """')
-        end = content.index('"""', start)
-        prompt = content[start:end]
-
-    # Extract MCP_SERVERS list
     mcp_servers = []
-    if 'MCP_SERVERS = [' in content:
-        start = content.index('MCP_SERVERS = [') + len('MCP_SERVERS = [')
-        end = content.index(']', start)
-        mcp_str = content[start:end]
-        # Parse the list (simple parsing)
-        if mcp_str.strip():
-            mcp_servers = [s.strip().strip('"').strip("'") for s in mcp_str.split(',')]
-
-    # Extract TOOLS list (tool names)
     tools = []
-    if 'TOOLS = [' in content:
-        start = content.index('TOOLS = [') + len('TOOLS = [')
-        end = content.index(']', start)
-        tools_str = content[start:end]
-        if tools_str.strip():
-            tools = [s.strip() for s in tools_str.split(',')]
+
+    try:
+        tree = ast.parse(content)
+        
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        
+                        # Extract AGENT_PROMPT
+                        if target.id == 'AGENT_PROMPT':
+                            # Handle different python versions (3.8+ uses value, older uses s)
+                            if hasattr(node.value, 'value'):
+                                prompt = node.value.value
+                            elif hasattr(node.value, 's'):
+                                prompt = node.value.s
+                                
+                        # Extract MCP_SERVERS
+                        elif target.id == 'MCP_SERVERS':
+                            if isinstance(node.value, ast.List):
+                                for elt in node.value.elts:
+                                    val = None
+                                    if hasattr(elt, 'value'):
+                                        val = elt.value
+                                    elif hasattr(elt, 's'):
+                                        val = elt.s
+                                    
+                                    if val is not None:
+                                        mcp_servers.append(val)
+                                        
+                        # Extract TOOLS
+                        elif target.id == 'TOOLS':
+                            if isinstance(node.value, ast.List):
+                                for elt in node.value.elts:
+                                    val = None
+                                    if hasattr(elt, 'value'):
+                                        val = elt.value
+                                    elif hasattr(elt, 's'):
+                                        val = elt.s
+                                    
+                                    if val is not None:
+                                        tools.append(val)
+                                        
+    except Exception as e:
+        print(f"Error parsing agent file {file_path}: {e}", file=sys.stderr)
+        # Fallback to empty values if parsing fails, but keep file_content
+        pass
 
     return {
         "prompt": prompt,
@@ -225,7 +256,7 @@ def read_agent_file(file_path: str) -> Dict[str, any]:
 
 def apply_modification_to_file(
     file_path: str,
-    modification: Dict[str, any]
+    modification: Dict[str, Any]
 ) -> str:
     """Apply an AgentModification to a Dedalus agent file.
 
