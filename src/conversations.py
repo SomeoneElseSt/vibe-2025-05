@@ -121,7 +121,8 @@ async def create_conversation(
                 "model": model,
                 "temperature": temperature,
                 "base_agent_prompt": base_agent_prompt,
-                "conversational_agent_prompt": conversational_agent_prompt
+                "conversational_agent_prompt": conversational_agent_prompt,
+                "initial_message": initial_message
             }
         }
         

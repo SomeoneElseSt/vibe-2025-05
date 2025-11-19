@@ -59,6 +59,15 @@ function IterationDetails({ iteration }: { iteration: any }) {
                       <p className="text-xs font-medium text-purple-900 mb-2">
                         Conversation {jIdx + 1} - {judgment.overall_pass ? "✓ Passed" : "✗ Failed"}
                       </p>
+                      
+                      {/* Show initial message */}
+                      {conversation?.metadata?.initial_message && (
+                        <div className="mb-3 p-2 bg-yellow-50 border-l-2 border-yellow-500 rounded">
+                          <p className="text-xs font-medium text-yellow-900">Initial User Message:</p>
+                          <p className="text-xs text-yellow-800 mt-1">{conversation.metadata.initial_message}</p>
+                        </div>
+                      )}
+                      
                       {conversation?.messages && (
                         <div className="space-y-2">
                           {conversation.messages.map((msg: any, mIdx: number) => (
